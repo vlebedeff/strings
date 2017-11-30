@@ -37,9 +37,11 @@ spec = do
         , "4->7:N"
         ]
   describe "#match" $ do
+    let check text patterns indices =
+          (match (fromPatterns patterns) text) `shouldBe` indices
     it "finds where patterns occur in a given string" $ do
-      let check text patterns indices =
-            (match (fromPatterns patterns) text) `shouldBe` indices
       check "AAA" ["AA"] [0, 1]
       check "AA" ["T"] []
       check "AATCGGGTTCAATCGGGGT" ["ATCG", "GGGT"] [1, 4, 11, 15]
+    context "when some patters are prefixes of other patters" $ do
+      it "finds all occurrences" $ do check "ACATA" ["AT", "A", "AG"] [0, 2, 4]

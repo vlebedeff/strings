@@ -11,6 +11,7 @@ import qualified Data.Map as M
 data Trie = Trie
   { trieValue :: Int
   , trieChildren :: M.Map Char Trie
+  , trieEndOfLine :: Bool
   }
 
 data Crumb = Crumb
@@ -26,9 +27,9 @@ data Zipper = Zipper
 instance Show Trie where
   show = intercalate "\n" . showTrie
     where
-      showTrie trie@(Trie value chrn) =
+      showTrie trie@(Trie value chrn _) =
         (M.elems $ M.mapWithKey (showEdge value) chrn) ++ (showChildren trie)
-      showEdge source label (Trie dest _) =
+      showEdge source label (Trie dest _ _) =
         (show source) ++ "->" ++ (show dest) ++ ":" ++ [label]
       showChildren parent = concat $ map showTrie (chValues parent)
       chValues = M.elems . trieChildren
@@ -43,10 +44,10 @@ empty :: TrieState
 empty = do
   count <- get
   put $ count + 1
-  return (Trie count M.empty)
+  return (Trie count M.empty False)
 
 findOrCreate :: Char -> Trie -> TrieState
-findOrCreate label (Trie _ children) =
+findOrCreate label (Trie _ children _) =
   case M.lookup label children of
     Just child -> return child
     Nothing -> empty
@@ -62,7 +63,7 @@ addSuffix :: Trie -> String -> TrieState
 addSuffix trie [] = return trie
 addSuffix trie cs = do
   zipper' <- foldM addEdge zipper cs
-  return $ (zipperCurrent . zipperTop) zipper'
+  return $ (zipperCurrent . zipperTop . endOfLine) zipper'
   where
     zipper = zipperNew trie
 
@@ -84,22 +85,25 @@ zipperTop (Zipper current (crumb:crumbs)) = zipperTop $ Zipper current' crumbs
     children = M.insert label current (trieChildren parent)
     (Crumb parent label) = crumb
 
+endOfLine :: Zipper -> Zipper
+endOfLine (Zipper current crumbs) = Zipper current' crumbs
+  where
+    current' = current {trieEndOfLine = True}
+
 find :: String -> Trie -> Maybe Int
-find [] (Trie value _) = Just $ value
-find (k:ks) (Trie _ children) = do
+find [] (Trie value _ _) = Just $ value
+find (k:ks) (Trie _ children _) = do
   ct <- M.lookup k children
   find ks ct
 
 prefixMatch :: String -> Trie -> Maybe String
 prefixMatch text trie = go text trie ""
   where
-    go [] (Trie _ children) path
-      | (M.null children) = Just path
-      | otherwise = Nothing
-    go (first:rest) (Trie value children) path
-      | (M.null children) = Just path
+    go _ (Trie _ _ True) path = Just path
+    go (first:rest) (Trie value children _) path
       | (M.member first children) = go rest (children M.! first) (first : path)
       | otherwise = Nothing
+    go _ _ _ = Nothing
 
 match :: Trie -> String -> [Int]
 match trie text = reverse $ go text trie [] 0
